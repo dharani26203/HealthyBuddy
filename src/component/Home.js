@@ -33,10 +33,13 @@ const Home = () => {
   return (
     <>
       <Navbar onLoginClick={handleLoginClick} />
-      <Hero />
-      <NutritionAnalyzer
-        onLoginRequest={handleLoginClick}
-        />
+      <div id="hero-section">
+        <Hero />
+      </div>
+      <div id="ai">
+        <NutritionAnalyzer   onLoginRequest={handleLoginClick}/>
+      </div>
+          
       <SectionUnlock />
       <Empowering />
       <Footer />
