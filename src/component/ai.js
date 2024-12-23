@@ -1,9 +1,9 @@
-import React, { useState,useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { auth } from "../Config/FireBase";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { useNavigate } from 'react-router-dom'; // If using React Router for navigation
+import { onAuthStateChanged } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';
+import { Bot, Loader2, AlertCircle, ChevronRight, Apple } from 'lucide-react';
 
 const NutritionAnalyzer = ({ onLoginRequest }) => {
   const [responseText, setResponseText] = useState('');
@@ -11,25 +11,39 @@ const NutritionAnalyzer = ({ onLoginRequest }) => {
   const [foodItems, setFoodItems] = useState('');
   const [error, setError] = useState('');
   const [user, setUser] = useState(null);
+  const [isAnalysisVisible, setIsAnalysisVisible] = useState(false);
 
-  const navigate = useNavigate(); // Hook from React Router for navigation
+  const navigate = useNavigate();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
     });
-
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (responseText) {
+      setIsAnalysisVisible(true);
+    }
+  }, [responseText]);
+
   const genAI = new GoogleGenerativeAI("AIzaSyCNJcZT4sGpJzkOZ6NqXnf6Rhicev4N68o");
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
   const handleGetNutritionInfoClick = () => {
     if (!user) {
-      onLoginRequest();  // Trigger login modal from parent component
+      onLoginRequest();
       return;
     }
     getNutritionInfo();
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !loading) {
+      e.preventDefault();
+      handleGetNutritionInfoClick();
+    }
   };
 
   const getNutritionInfo = async () => {
@@ -40,6 +54,7 @@ const NutritionAnalyzer = ({ onLoginRequest }) => {
 
     setLoading(true);
     setError('');
+    setIsAnalysisVisible(false);
     
     const prompt = `I ate ${foodItems}. If it is impossible to provide precise nutritional information due to unspecified details about the food items such as brand, size, or recipe, please generate random plausible nutritional values and health details in the following list format:
 
@@ -56,9 +71,7 @@ Total Nutrition:
 Deficiencies: provide a random deficiency description
 Diseases:
 - Disease Name: provide a potential random disease related to dietary habits
-- Details: provide details on the potential disease impacts
-
-If sufficient details are provided, calculate and provide the exact nutritional information in the same list format as demonstrated above.`;
+- Details: provide details on the potential disease impacts`;
 
     try {
       const result = await model.generateContent(prompt);
@@ -72,12 +85,10 @@ If sufficient details are provided, calculate and provide the exact nutritional 
   };
 
   const formatLine = (text) => {
-    // Replace **text** patterns with bold text
     const parts = text.split('**');
-    return parts.map((part, index) => {
-      // Even indices are normal text, odd indices should be bold
-      return index % 2 === 1 ? <strong key={index}>{part}</strong> : part;
-    });
+    return parts.map((part, index) => 
+      index % 2 === 1 ? <strong key={index}>{part}</strong> : part
+    );
   };
 
   const formatResponse = (text) => {
@@ -87,29 +98,38 @@ If sufficient details are provided, calculate and provide the exact nutritional 
     return lines.map((line, index) => {
       if (!line.trim()) return null;
 
-      // Format headings
-      if (line.includes('Total Nutrition:') || 
-          line.includes('Deficiencies:') || 
-          line.includes('Diseases:')) {
+      if (line.includes('Total Nutrition:')) {
         return (
-          <h3 key={index} className="text-lg font-bold mt-4 mb-2">
+          <h3 key={index} className="text-xl font-bold mt-6 mb-4 text-blue-600 flex items-center gap-2">
+            <Apple className="h-5 w-5" />
             {formatLine(line)}
           </h3>
         );
       }
 
-      // Format list items
-      if (line.startsWith('-')) {
+      if (line.includes('Deficiencies:') || line.includes('Diseases:')) {
         return (
-          <p key={index} className="ml-4 mb-1">
+          <h3 key={index} className="text-xl font-bold mt-6 mb-4 text-orange-600 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
             {formatLine(line)}
-          </p>
+          </h3>
         );
       }
 
-      // Format any other text
+      if (line.startsWith('-')) {
+        return (
+          <div key={index} 
+               className="ml-4 mb-3 p-3 bg-gray-50 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 transform hover:-translate-y-1">
+            <p className="flex items-center gap-2">
+              <ChevronRight className="h-4 w-4 text-gray-400" />
+              {formatLine(line)}
+            </p>
+          </div>
+        );
+      }
+
       return (
-        <p key={index} className="mb-1">
+        <p key={index} className="mb-3 text-gray-600">
           {formatLine(line)}
         </p>
       );
@@ -117,37 +137,64 @@ If sufficient details are provided, calculate and provide the exact nutritional 
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-4 text-center">Nutrition Analyzer</h2>
-      
-      <div className="flex gap-2 mb-4">
-        <input
-          type="text"
-          value={foodItems}
-          onChange={e => setFoodItems(e.target.value)}
-          placeholder="Enter food items (e.g., '2 slices of pizza, salad, and a cookie')"
-          className="flex-grow p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-        />
-        <button 
-          onClick={handleGetNutritionInfoClick} 
-          disabled={loading}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Analyzing...' : 'Get Nutrition Info'}
-        </button>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 py-12 px-4">
+      <div className="max-w-3xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-xl p-8 transform transition-all duration-500 hover:shadow-2xl">
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <Bot className="h-8 w-8 text-blue-500 animate-bounce" />
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-orange-500 bg-clip-text text-transparent">
+              Nutrition Analyzer
+            </h2>
+          </div>
+          
+          <div className="relative mb-6">
+            <input
+              type="text"
+              value={foodItems}
+              onChange={e => setFoodItems(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Enter food items (e.g., '2 slices of pizza, salad, and a cookie')"
+              className="w-full p-4 pr-36 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-all duration-300"
+            />
+            <button 
+              onClick={handleGetNutritionInfoClick} 
+              disabled={loading}
+              className="absolute right-2 top-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transform transition-all duration-300 hover:scale-105 active:scale-95 flex items-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Bot className="h-5 w-5" />
+                  Analyze
+                </>
+              )}
+            </button>
+          </div>
+
+          {error && (
+            <div className="p-4 mb-6 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-lg animate-fade-in">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                {error}
+              </div>
+            </div>
+          )}
+
+          {responseText && (
+            <div className={`mt-6 transition-all duration-500 transform ${
+              isAnalysisVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            }`}>
+              <div className="bg-gradient-to-r from-blue-50 to-orange-50 p-6 rounded-xl border border-gray-200">
+                {formatResponse(responseText)}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-
-      {error && (
-        <div className="p-4 mb-4 bg-red-100 text-red-700 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      {responseText && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-          {formatResponse(responseText)}
-        </div>
-      )}
     </div>
   );
 };
