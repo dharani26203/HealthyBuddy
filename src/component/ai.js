@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'; 
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { auth } from "../Config/FireBase";
+import { auth, db } from "../Config/FireBase";
 import { onAuthStateChanged } from 'firebase/auth';
+import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-import {  Bot, Loader2, AlertCircle, ChevronRight, Apple, Scale, Ruler, GlassWater, User2  } from 'lucide-react';
+import { Bot, Loader2, AlertCircle, ChevronRight, Apple, Scale, Ruler, GlassWater, User2 } from 'lucide-react';
 
-const NutritionAnalyzer = ({ onLoginRequest }) => {
+const NutritionAnalyzer = ({ onLoginRequest , drinkCount }) => {
   const [responseText, setResponseText] = useState('');
   const [loading, setLoading] = useState(false);
   const [foodItems, setFoodItems] = useState('');
@@ -21,6 +22,8 @@ const NutritionAnalyzer = ({ onLoginRequest }) => {
 
   const navigate = useNavigate();
 
+
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -34,12 +37,49 @@ const NutritionAnalyzer = ({ onLoginRequest }) => {
     }
   }, [responseText]);
 
+  useEffect(() => {
+    console.log(`Water intake logged: ${drinkCount} glasses`);
+  }, [drinkCount]);
+
   const genAI = new GoogleGenerativeAI("AIzaSyCNJcZT4sGpJzkOZ6NqXnf6Rhicev4N68o");
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   const calculateBMI = (weight, height) => {
     const heightInMeters = height / 100;
     return (weight / (heightInMeters * heightInMeters)).toFixed(1);
+  };
+  
+  const storeAnalysisData = async (analysisData) => {
+    if (!user?.uid) {
+      throw new Error('User not authenticated');
+    }
+    
+
+    try {
+      const userAnalysesRef = collection(db, 'users', user.uid, 'analyses');
+      
+      const healthData = {
+        userId: user.uid,
+        timestamp: serverTimestamp(),
+        inputs: {
+          height: parseFloat(height),
+          weight: parseFloat(weight),
+          gender,
+          waterIntake: parseFloat(waterIntake),
+          foodItems,
+        },
+        analysis: analysisData,
+        drinkCount: parseInt(drinkCount) || 0
+      };
+;
+
+      const docRef = await addDoc(userAnalysesRef, healthData);
+      console.log('Analysis stored with ID:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error storing analysis:', error);
+      throw new Error(`Failed to store analysis: ${error.message}`);
+    }
   };
 
   const handleGetNutritionInfoClick = () => {
@@ -58,6 +98,10 @@ const NutritionAnalyzer = ({ onLoginRequest }) => {
   };
 
   const getNutritionInfo = async () => {
+    if (!user) {
+      onLoginRequest();
+      return;
+    }
     if (!foodItems.trim()) {
       setError('Please enter some food items');
       return;
@@ -108,8 +152,14 @@ Lifestyle Recommendations:
 
     try {
       const result = await model.generateContent(prompt);
-      const text = await result.response.text();
-      setResponseText(text);
+      const analysisText = await result.response.text();
+      
+      // Store in Firestore
+      await storeAnalysisData(analysisText);
+      
+      // Update UI
+      setResponseText(analysisText);
+      setIsAnalysisVisible(true);
     } catch (error) {
       setError(error.message || 'An error occurred while analyzing your information');
     } finally {
@@ -269,12 +319,13 @@ Lifestyle Recommendations:
                   <div className="flex items-center gap-2 bg-white rounded-xl p-3 border-2 border-transparent focus-within:border-orange-500 transition-all duration-300">
                     <GlassWater className="h-5 w-5 text-orange-400" />
                     <input
-                      type="number"
-                      value={waterIntake}
-                      onChange={e => setWaterIntake(e.target.value)}
-                      placeholder="Number of glasses"
-                      className="w-full focus:outline-none"
-                    />
+                        type="number"
+                        value={waterIntake}
+                        onChange={e => setWaterIntake(e.target.value)}
+                        placeholder={`Number of glasses (until now ${drinkCount})`}
+                        className="w-full focus:outline-none"
+                      />
+
                     <span className="text-gray-500">glasses</span>
                   </div>
                 </div>
