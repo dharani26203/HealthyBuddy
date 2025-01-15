@@ -1,4 +1,3 @@
-// Home.js
 import React, { useState } from 'react';
 import Navbar from './Navbar';
 import Hero from './Hero';
@@ -6,23 +5,25 @@ import NutritionAnalyzer from './ai';
 import SectionUnlock from './SectionUnlock';
 import Empowering from './Empowere';
 import Footer from './Fotter';
-import Modal from './Modal'; // Ensure this is imported
-import LoginModal from './LoginModal'
-
-
+import Modal from './Modal';
+import LoginModal from './LoginModal';
+import WaterReminder from './Waterreminder';
+import HealthHistory from './healthhstory';
+import GoogleFit from './googlefit';
+import PhysicalActivityTracker from './PhysicalActivitytracker';
 
 const Home = () => {
   const [isModalOpen, setModalOpen] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false); // State to toggle between login and register
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [drinkCount, setDrinkCount] = useState(0); // State to track water count
 
   const handleLoginClick = () => {
-    setIsRegistering(false); // Set to false for login
+    setIsRegistering(false);
     setModalOpen(true);
   };
- 
 
   const handleRegisterClick = () => {
-    setIsRegistering(true); // Set to true for register
+    setIsRegistering(true);
     setModalOpen(true);
   };
 
@@ -37,9 +38,11 @@ const Home = () => {
         <Hero />
       </div>
       <div id="ai">
-        <NutritionAnalyzer   onLoginRequest={handleLoginClick}/>
+        <NutritionAnalyzer onLoginRequest={handleLoginClick} drinkCount={drinkCount} />
       </div>
-          
+      <div id="tracker">
+        <PhysicalActivityTracker/>
+      </div>
       <SectionUnlock />
       <Empowering />
       <Footer />
@@ -49,9 +52,10 @@ const Home = () => {
         onSwitchToRegister={handleRegisterClick}
         isRegistering={isRegistering}
       />
+       <WaterReminder onDrinkCountChange={setDrinkCount} />
+       <GoogleFit/>
     </>
   );
 };
 
 export default Home;
-
